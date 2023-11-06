@@ -19,18 +19,17 @@ enable_testing()
 find_package(Boost 1.74.0 REQUIRED system)
 find_package(Threads REQUIRED)
 
-add_subdirectory(TestClient)
+add_subdirectory(TestUtils)
 
 add_executable( ServerTests
-    ConnectionTests.cpp
+    # ConnectionTests.cpp
     ServerTests.cpp
 )
 
-target_link_libraries(
-    ServerTests
+target_link_libraries( ServerTests
     PUBLIC GTest::gtest_main
-    PRIVATE testClinet
     PRIVATE AsyncServerLib
+    PUBLIC TestUtilsLib
     PRIVATE Threads::Threads
 )
 

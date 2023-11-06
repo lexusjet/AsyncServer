@@ -1,7 +1,10 @@
 #include <gtest/gtest.h>
 
-#include <TestClient/TestClient.h>
+// #include <TestClient/TestClient.h>
+// #include "../Test/TestUtils/Test"
 #include <AsyncServer/AsyncServer.h>
+#include <TestClient/TestClient.cpp>
+#include <TestListner/TestListner.cpp>
 
 #include <iostream>
 #include <boost/asio.hpp>
@@ -19,63 +22,93 @@ namespace asio = boost::asio;
 using tcp = boost::asio::ip::tcp;
 using ErrorCode = boost::system::error_code;
 const std::string corectIP = "127.0.0.1";
-int curentPort = 1000;
+int curentPort = 2000;
+
+
+AsyncServer::ErrorCollback DefaultServerErrorCollback = 
+[](const ErrorCode& error)
+{
+    EXPECT_TRUE(error);
+};
+
 
 /* ---------------------------------------------------------------- */
 /* ---------------------------------------------------------------- */
-// TEST(AsyncServer, incorect_addres)
-// {
-//     AsyncServer::ErrorCollback serverErrorCollback = 
-//     [](const ErrorCode& error)
-//     {
-//         EXPECT_TRUE(error);
-//     };
+TEST(AsyncServer, incorect_addres)
+{
+    AsyncServer::ErrorCollback serverErrorCollback = 
+    [](const ErrorCode& error)
+    {
+        EXPECT_TRUE(error);
+    };
+    AsyncServer::StateChangedCollback func =
+    [](const AsyncServer::State state){};
 
-//     tcp::endpoint endpoint(asio::ip::make_address("127.0.0.0"), 1000);
-//     AsyncServer server(
-//         endpoint,
-//         serverErrorCollback
-//     );
-//     EXPECT_EQ(server.getState(), AsyncServer::FailedToConstruct);
-//     curentPort++;
-// }
-
-/* ---------------------------------------------------------------- */
-/* ---------------------------------------------------------------- */
-// TEST(AsyncServer, ServerCreated)
-// {
-//     AsyncServer::ErrorCollback serverErrorCollback = 
-//     [](const ErrorCode& error)
-//     {
-//         EXPECT_TRUE(error);
-//     };
-//     tcp::endpoint endpoint(asio::ip::make_address(corectIP), curentPort);
-//     AsyncServer server (
-//         endpoint,
-//         serverErrorCollback
-//     );
-//     EXPECT_EQ(server.getState(), AsyncServer::Created);
-//     curentPort++;
-// }
+    tcp::endpoint endpoint(asio::ip::make_address("127.0.0.0"), 1000);
+    AsyncServer server(
+        endpoint,
+        func,
+        serverErrorCollback
+    );
+    EXPECT_EQ(server.getState(), AsyncServer::FailedToConstruct);
+    curentPort++;
+}
 
 /* ---------------------------------------------------------------- */
 /* ---------------------------------------------------------------- */
-// TEST(AsyncServer, ServerListening)
-// {
-//     AsyncServer::ErrorCollback serverErrorCollback = 
-//     [](const ErrorCode& error)
-//     {
-//         EXPECT_TRUE(error);
-//     };
-//     tcp::endpoint endpoint(asio::ip::make_address(corectIP), curentPort);
-//     AsyncServer server (
-//         endpoint,
-//         serverErrorCollback
-//     );
-//     std::thread(&AsyncServer::run, &server);
-//     EXPECT_EQ(server.getState(), AsyncServer::Listening);
-//     curentPort++;
-// }
+TEST(AsyncServer, ServerCreated)
+{
+    AsyncServer::ErrorCollback serverErrorCollback = 
+    [](const ErrorCode& error)
+    {
+        EXPECT_FALSE(error);
+    };
+    AsyncServer::StateChangedCollback func =
+    [](const AsyncServer::State state){};
+
+    tcp::endpoint endpoint(asio::ip::make_address(corectIP), curentPort);
+    AsyncServer server (
+        endpoint,
+        func,
+        serverErrorCollback
+    );
+    EXPECT_EQ(server.getState(), AsyncServer::Created);
+    curentPort++;
+}
+
+/* ---------------------------------------------------------------- */
+/* ---------------------------------------------------------------- */
+TEST(AsyncServer, ServerListening)
+{
+    std::condition_variable cv;
+    std::atomic<bool> flag = false;
+
+    AsyncServer::ErrorCollback serverErrorCollback = 
+    [](const ErrorCode& error)
+    {
+        EXPECT_TRUE(error);
+    };
+    AsyncServer::StateChangedCollback func =
+    [&](const AsyncServer::State state)
+    {
+        flag.store(true);
+        flag.notify_all();
+    };
+
+    tcp::endpoint endpoint(asio::ip::make_address(corectIP), curentPort);
+    AsyncServer server (
+        endpoint,
+        func,
+        serverErrorCollback
+    );
+    std::thread thr (&AsyncServer::run, &server);
+    
+    flag.wait(false);
+    EXPECT_EQ(server.getState(), AsyncServer::Listening);
+    server.stop("");
+    thr.join();
+    curentPort++;
+}
 
 /* ---------------------------------------------------------------- */
 /* ---------------------------------------------------------------- */
@@ -99,52 +132,41 @@ int curentPort = 1000;
 
 /* ---------------------------------------------------------------- */
 /* ---------------------------------------------------------------- */
-// TEST(AsyncServer_Connection, recive_data)
-// {
-//     std::thread serverThread(
-//         [&]()
-//         {
-//             AsyncServer::ErrorCollback serverErrorCollback = 
-//             [](const ErrorCode& error)
-//             {
-//                 EXPECT_FALSE(error);
-//             };
-//             tcp::endpoint endpoint(asio::ip::make_address(corectIP), curentPort);
-//             AsyncServer server(endpoint, serverErrorCollback);
-//             EXPECT_EQ(server.getState(), AsyncServer::Created);
-//             server.run();
-//         }
-//     );
-//     sleep(1);
-//     std::string message = "hellow server\n";
-//     std::string anser;
-//     std::thread clientThread(
-//         [&](){
-//             asio::io_context clientContext;
-//             tcp::endpoint endP(asio::ip::make_address(corectIP), curentPort);
-//             std::shared_ptr<TestClient> client = std::make_shared<TestClient>(
-//                 clientContext,
-//                 endP,
-//                 [&](const ErrorCode& error){
-//                     EXPECT_FALSE(error);
-//                     client->reciveMessage();
-//                 },
-//                 [&](const ErrorCode& error, const std::string& str){
-//                     EXPECT_FALSE(error);
-//                     anser = str;
-//                 }
-//             );
-//             client->sendMessage(message);
-//             clientContext.run();
-//         }
-//     );
-    
-//     clientThread.join();
-//     serverThread.join();
+TEST(AsyncServer_Connection, recive_data)
+{
+    std::condition_variable cv;
+    std::atomic<bool> flag = false;
 
-//     EXPECT_EQ(message, anser);
-//     curentPort++;
-// }
+    AsyncServer::ErrorCollback serverErrorCollback = 
+    [](const ErrorCode& error)
+    {
+        EXPECT_TRUE(error);
+    };
+    AsyncServer::StateChangedCollback func =
+    [&](const AsyncServer::State state)
+    {
+        flag.store(true);
+        flag.notify_all();
+    };
+
+    tcp::endpoint endpoint(asio::ip::make_address(corectIP), curentPort);
+    AsyncServer server (
+        endpoint,
+        func,
+        serverErrorCollback
+    );
+    std::thread clientThread(
+        [&](){
+            // TestClient client;
+            // EXPECT_NE(client.connect(endpoint), -1);
+            // EXPECT_NE(client.sendMessage(""), -1);
+            // EXPECT_NE(client.reciveMessage(), -1);
+            
+        }
+    );
+    std::thread thr (&AsyncServer::run, &server);
+
+}
 
 // TEST(AsyncServer_Connection, disconect_while_riding)
 // {

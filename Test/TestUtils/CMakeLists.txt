@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0.0)
-project(testClinet CXX)
+project(TestUtils CXX)
 
 
 set(CMAKE_CXX_FLAGS "")
@@ -39,11 +39,16 @@ add_compile_options(
 
 find_package(Boost 1.74.0 REQUIRED system)
 
-add_library(testClinet STATIC
-    include/TestClient/TestClient.h
-    src/TestClient.cpp
+
+add_library(TestUtilsLib STATIC
+    include/TestClient/TestClient.cpp
+    include/TestListner/TestListner.cpp
 )
 
-target_include_directories(testClinet
+target_link_libraries(TestUtilsLib
+    PRIVATE AsyncServerLib
+)
+
+target_include_directories(TestUtilsLib
     PUBLIC include
 )
