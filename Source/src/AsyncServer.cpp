@@ -5,9 +5,6 @@
 #include <chrono>
 
 #include <boost/bind/bind.hpp>
-
-
-
 #include <boost/beast/core.hpp>
 #include <boost/beast/http.hpp>
 #include <boost/beast/version.hpp>
@@ -19,14 +16,16 @@ namespace beast = boost::beast;         // from <boost/beast.hpp>
 namespace asio = boost::asio;
 using tcp = boost::asio::ip::tcp;
 using ErrorCode = boost::system::error_code;
-//========================================================================
+//=======================================================================
 
 AsyncServer::AsyncServer(
         tcp::endpoint endPoint,
+        StateChangedCollback stateChangedCollback,
         ErrorCollback errorCollback
 ):
     m_acceptor(m_ioContext),
-    onErrorCollback(errorCollback)
+    m_onStateChangedCollback(stateChangedCollback),
+    m_onErrorCollback(errorCollback)
 {
     m_state = State::Constructing;
     ErrorCode errorCode;
@@ -36,7 +35,7 @@ AsyncServer::AsyncServer(
     if(errorCode)
     {
         m_state = FailedToConstruct;
-        onErrorCollback(errorCode);
+        m_onErrorCollback(errorCode);
         return;
     }
 
@@ -49,7 +48,7 @@ AsyncServer::AsyncServer(
     if(errorCode)
     {
         m_state = FailedToConstruct;
-        onErrorCollback(errorCode);
+        m_onErrorCollback(errorCode);
         return;
     }
 
@@ -58,7 +57,7 @@ AsyncServer::AsyncServer(
     if(errorCode)
     {
         m_state = FailedToConstruct;
-        onErrorCollback(errorCode);
+        m_onErrorCollback(errorCode);
         return;
     }
 
@@ -70,7 +69,7 @@ AsyncServer::AsyncServer(
     if(errorCode)
     {
         m_state = FailedToConstruct;
-        onErrorCollback(errorCode);
+        m_onErrorCollback(errorCode);
         return;
     }
 
@@ -78,20 +77,38 @@ AsyncServer::AsyncServer(
     m_state = State::Created;
 }
 
+/* =================================================================== */
 AsyncServer::~AsyncServer()
 {
     m_state = State::Destroyed;
+    for (auto listner: m_listenerVec)
+    {
+        listner->unSubscribe();
+    }
 }
 
+/* =================================================================== */
 AsyncServer::State AsyncServer::getState()
 {
     std::unique_lock lock(m_mutex);
     return m_state;
 }
 
+/* =================================================================== */
 void AsyncServer::run()
 {
-    m_ioContext.post(boost::bind(&AsyncServer::doAccept, this));
+    // asio::strand strand = asio::make_strand(m_ioContext);
+    m_ioContext.post(
+        std::bind(
+            [&](){
+                this->doAccept();
+                m_state.store(Listening);
+                m_onStateChangedCollback(Listening);
+            }
+        )
+    );
+    // m_ioContext.post(boost::bind(&AsyncServer::doAccept, this));
+    // m_ioContext.post(std::bind(m_onStateChangedCollback, Listening));
     m_ioContext.run();
 }
 
@@ -107,17 +124,32 @@ void AsyncServer::stop(const std::string& stopMode)
     }
     else
     {
-
     }
+    m_ioContext.stop();
 
 }
 
+/* =================================================================== */
+void AsyncServer::addListner(ServerListener* pListner)
+{
+    m_listenerVec.emplace_back(pListner);
+    pListner->subscribe(this);
+}
+
+/* =================================================================== */
+void AsyncServer::removeListner(ServerListener* pListner)
+{
+    auto itr = std::find(m_listenerVec.begin(), m_listenerVec.end(), pListner);
+    if (itr != m_listenerVec.end())
+    {
+        m_listenerVec.erase(itr);
+        pListner->unSubscribe();
+    }
+}
+
+/* =================================================================== */
 void AsyncServer::doAccept()
 {
-    {
-        std::unique_lock lock(m_mutex);
-        m_state = State::Listening;
-    }
 
     m_acceptor.async_accept(
         asio::make_strand(m_ioContext),
@@ -128,6 +160,7 @@ void AsyncServer::doAccept()
     );
 }
 
+/* =================================================================== */
 void AsyncServer::onAccept(
     const boost::system::error_code& errorCode,
     tcp::socket sock
@@ -135,7 +168,7 @@ void AsyncServer::onAccept(
 {
     if(errorCode)
     {
-        onErrorCollback(errorCode);
+        m_onErrorCollback(errorCode);
         return;
     }
     else
@@ -162,11 +195,13 @@ void AsyncServer::onAccept(
     doAccept();
 }
 
+/* =================================================================== */
 void AsyncServer::connectionErrorHandler(const int socket, const ErrorCode error)
 {
     m_connectionsUMap.erase(socket);
 }
 
+/* =================================================================== */
 void AsyncServer::connectionStateHandler(const int socket, const Connection::State state)
 {
     switch (state)

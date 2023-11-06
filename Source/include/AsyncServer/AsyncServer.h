@@ -1,17 +1,18 @@
 #pragma once
-#include <Connection/Connection.h>
+
 // класс сервера должен осуществлять покдлючение новых соединений 
 // выдавать ошибки в своей работе
 // 
 // минимальная версия должна уметь подключить соединение 
 // и отключить как только оно закончиться
+#include <Connection/Connection.h>
+#include <ServerListener/ServerListener.h>
 #include <string>
 #include <boost/asio.hpp>
 #include <unordered_map>
 #include <unordered_set>
 #include <mutex>
 #include <condition_variable>
-
 
 // =============================================================================
 class ServerListner;
@@ -29,6 +30,7 @@ public:
             Destroyed,
         };
     using ErrorCode = boost::system::error_code;
+    using StateChangedCollback = std::function<void (const State)>;
     using ErrorCollback = std::function<void (const ErrorCode& )>;
 
 private:
@@ -36,22 +38,27 @@ private:
     boost::asio::ip::tcp::acceptor m_acceptor;
     
     // curent state of server
-    State m_state;
-    
-    ErrorCollback onErrorCollback;
+    // State m_state;
+    std::atomic<State> m_state;
+
+    StateChangedCollback m_onStateChangedCollback;
+    ErrorCollback m_onErrorCollback;
 
     std::mutex m_mutex;
     std::condition_variable m_conditionVariable;    
 
     std::unordered_map<int, Connection> m_connectionsUMap;
+
+    std::vector<ServerListener*> m_listenerVec;
+
 public:
     AsyncServer() = delete;
     AsyncServer(const AsyncServer&) = delete;
     void operator=(const AsyncServer& ) = delete;
 
-
     AsyncServer(
         boost::asio::ip::tcp::endpoint,
+        StateChangedCollback,
         ErrorCollback
     );
     ~AsyncServer();
@@ -61,6 +68,9 @@ public:
     void run(); 
 
     void stop(const std::string& stopMode);
+
+    void addListner(ServerListener* pListner);
+    void removeListner(ServerListener* pListner);
 
 private:
     void doAccept();
