@@ -36,6 +36,15 @@ add_compile_options(
 
 find_package(Boost 1.74.0 REQUIRED system)
 
+add_library(SensorMessageLib STATIC
+    src/SensorMessage.cpp
+    include/SensorMessage/SensorMessage.h
+)
+
+target_include_directories(SensorMessageLib
+    PUBLIC include
+)
+
 add_subdirectory(lib/Connection)
 # add_subdirectory(lib/ServerListener)
 
@@ -45,13 +54,14 @@ add_library(ServerListenerLib
 
 add_library(AsyncServerLib STATIC
     include/AsyncServer/AsyncServer.h
-    src/AsyncServer.cpp 
+    src/AsyncServer.cpp
     # include/ServerListener/ServerListener.h
     # src/ServerListener.cpp 
 )
 
 target_link_libraries(ServerListenerLib
     PRIVATE AsyncServerLib
+    PUBLIC SensorMessageLib
 )
 
 target_link_libraries(AsyncServerLib
