@@ -46,10 +46,10 @@ class SensorMessage
         uint8_t getVersion() const {return header.version;};
 
         void setLocation(const uint8_t local){ header.location = local;};
-        uint8_t getLocation()const {return header.location;};
+        uint8_t getLocation() const {return header.location;};
 
         void setNumberInLocation(const uint8_t a) { header.numberInLocation = a;};
-        uint8_t getNumberInLocation()const {return header.numberInLocation;};
+        uint8_t getNumberInLocation() const {return header.numberInLocation;};
 
         void setDataType(const uint8_t type) {header.dataType = type;};
         uint8_t getDataType() const { return header.dataType;};
