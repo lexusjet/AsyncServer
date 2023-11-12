@@ -1,18 +1,9 @@
 #include <AsyncServer/AsyncServer.h>
 
-#include <iostream>
-#include <memory>
-#include <chrono>
-
-#include <boost/bind/bind.hpp>
-#include <boost/beast/core.hpp>
-#include <boost/beast/http.hpp>
-#include <boost/beast/version.hpp>
+#include <ServerListener/ServerListener.h>
 #include <boost/asio/dispatch.hpp>
 #include <boost/asio/strand.hpp>
-#include <boost/config.hpp>
 
-namespace beast = boost::beast;         // from <boost/beast.hpp>
 namespace asio = boost::asio;
 using tcp = boost::asio::ip::tcp;
 using ErrorCode = boost::system::error_code;
@@ -85,6 +76,7 @@ AsyncServer::~AsyncServer()
     {
         listner->unSubscribe();
     }
+    m_onStateChangedCollback(Destroyed);
 }
 
 /* =================================================================== */
@@ -95,9 +87,15 @@ AsyncServer::State AsyncServer::getState()
 }
 
 /* =================================================================== */
+size_t AsyncServer::nomberOfSessions()
+{
+    std::unique_lock lock(m_mutex);
+    return m_connectionsUMap.size();
+}
+
+/* =================================================================== */
 void AsyncServer::run()
 {
-    // asio::strand strand = asio::make_strand(m_ioContext);
     m_ioContext.post(
         std::bind(
             [&](){
@@ -107,8 +105,6 @@ void AsyncServer::run()
             }
         )
     );
-    // m_ioContext.post(boost::bind(&AsyncServer::doAccept, this));
-    // m_ioContext.post(std::bind(m_onStateChangedCollback, Listening));
     m_ioContext.run();
 }
 
@@ -150,21 +146,19 @@ void AsyncServer::removeListner(ServerListener* pListner)
 /* =================================================================== */
 void AsyncServer::doAccept()
 {
-
-    m_acceptor.async_accept(
+        m_acceptor.async_accept(
         asio::make_strand(m_ioContext),
-        beast::bind_front_handler(
+        std::bind(
             &AsyncServer::onAccept,
-            this
+            this,
+            std::placeholders::_1,
+            std::placeholders::_2
         )
     );
 }
 
 /* =================================================================== */
-void AsyncServer::onAccept(
-    const boost::system::error_code& errorCode,
-    tcp::socket sock
-)
+void AsyncServer::onAccept(const ErrorCode& errorCode, tcp::socket sock)
 {
     if(errorCode)
     {
@@ -174,25 +168,46 @@ void AsyncServer::onAccept(
     else
     {
         const int socketDsk = static_cast<int>(sock.native_handle());
+    //     auto connectionIt = m_connectionsUMap.emplace
+    //     (
+    //         socketDsk,
+    //         Connection(
+    //             std::move(sock),
+    //             [this, socketDsk](const int, const ErrorCode error){
+    //                 this->connectionErrorHandler(socketDsk, error);
+    //             },
+    //             [this, socketDsk](const int, const Connection::State state){
+    //                 this->connectionStateHandler(socketDsk, state);
+    //             },
+    //             [this](SensorMessage& message){
+    //                 this->notifyListners(message);
+    //             }
+    //         )
+    //     );
+    //     connectionIt.first->second.run();
+    // }
         auto connectionIt = m_connectionsUMap.emplace
         (
             socketDsk,
             Connection(
                 std::move(sock),
-                [this, socketDsk](const ErrorCode error){
-                    this->connectionErrorHandler(socketDsk, error);
-                },
-                [this, socketDsk](const Connection::State state){
-                    this->connectionStateHandler(socketDsk, state);
-                },
-                [](const std::string& str){
-                    return str;
-                }
+                std::bind(&AsyncServer::connectionErrorHandler, this, std::placeholders::_1, std::placeholders::_2),
+                std::bind(&AsyncServer::connectionStateHandler, this, std::placeholders::_1, std::placeholders::_2),
+                std::bind(&AsyncServer::notifyListners, this, std::placeholders::_1)
             )
         );
         connectionIt.first->second.run();
     }
     doAccept();
+}
+
+/* =================================================================== */
+void AsyncServer::notifyListners(SensorMessage& message) const
+{
+    for (auto listner: m_listenerVec)
+    {
+        listner->notify(message);
+    }
 }
 
 /* =================================================================== */

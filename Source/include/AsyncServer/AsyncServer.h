@@ -5,17 +5,18 @@
 // 
 // минимальная версия должна уметь подключить соединение 
 // и отключить как только оно закончиться
+
 #include <Connection/Connection.h>
-#include <ServerListener/ServerListener.h>
-#include <string>
 #include <boost/asio.hpp>
 #include <unordered_map>
-#include <unordered_set>
 #include <mutex>
 #include <condition_variable>
 
 // =============================================================================
-class ServerListner;
+class ServerListener;
+class Connection;
+class SensorMessage;
+
 
 class AsyncServer
 {
@@ -64,6 +65,7 @@ public:
     ~AsyncServer();
 
     State getState();
+    size_t nomberOfSessions();
 
     void run(); 
 
@@ -73,6 +75,7 @@ public:
     void removeListner(ServerListener* pListner);
 
 private:
+
     void doAccept();
 
     void onAccept(
@@ -80,6 +83,8 @@ private:
         boost::asio::ip::tcp::socket socket
     );
 
+    void notifyListners(SensorMessage& ) const;
+    
     void connectionStateHandler(const int socket, const Connection::State state);
     
     void connectionErrorHandler(const int socket, const ErrorCode error);

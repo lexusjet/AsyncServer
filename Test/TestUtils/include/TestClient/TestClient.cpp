@@ -4,6 +4,7 @@
 #include <boost/asio.hpp>
 #include <boost/bind/bind.hpp>
 #include <memory>
+#include <SensorMessage/SensorMessage.h>
 
 namespace asio = boost::asio;
 
@@ -39,57 +40,46 @@ public:
     }
     catch(...)
     {
-        // onError(ErrorCode());
         return -1;
     }
     return 0;
     }
 
-    int sendMessage(const std::string& message)
+    int sendMessage(const SensorMessage& message)
     {
-    
-    // std::ostream os(&m_otputBuffer);
-    // os << message;
-    size_t sended = 0;
-    while (sended < 5)
-    {
-        try
+
+        size_t sended = 0;
+        std::vector<char> buffer(message.messegeSize());
+        for (size_t i = 0; i < buffer.size(); ++i)
         {
-            // sended += m_socket.send(m_otputBuffer);
-            sended += m_socket.send(asio::buffer(message));
-        }
-        catch(...)
-        {
-            return -1;
+            buffer[i] = (message.data())[i];
         }
 
-    }
-    return 0;
+        while (sended < MESSAGE_SIZE)
+        {
+            try
+            {
+                sended += m_socket.send(asio::buffer(buffer));
+            }
+            catch(...)
+            {
+                return -1;
+            }
 
-    // asio::async_write(
-    //     m_socket,
-    //     m_otputBuffer,
-    //     boost::bind(
-    //         &TestClient::onWrite,
-    //         shared_from_this(),
-    //         asio::placeholders::error,
-    //         asio::placeholders::results
-    //     )
-    // );
+        }
+        return 0;
+
     }
 
-    int reciveMessage(std::string answer)
+    int reciveMessage(SensorMessage& answer)
     {
         size_t recived = 0;
-        char recv_str[5];
-        // socket.receive(boost::asio::buffer(recv_str));
+        char recv_str[MESSAGE_SIZE];
         try
         {
-            while (recived < 1)
+            while (recived < MESSAGE_SIZE)
             {
-                // recived += m_socket.receive(m_inputBuffer);
                 recived += m_socket.receive(boost::asio::buffer(recv_str));
-                
             }
             
         }
@@ -97,60 +87,21 @@ public:
         {
             return -1;
         }
+
+        char* p = (char*)(&answer);
+        for (size_t i = 0; i < MESSAGE_SIZE; ++i)
+        {
+            *(p + i) = recv_str[i];
+        }
+
         return 0;
 
-        // auto data = m_inputBuffer.data();
-        // std::string reply(
-        //     asio::buffers_begin(data),
-        //     asio::buffers_begin(data) + recived
-        // );
-        // answer = reply;
-
-        // asio::async_read_until(
-        //     m_socket,
-        //     m_inputBuffer,
-        //     "\n",
-        //     boost::bind(
-        //         &TestClient::onRecive,
-        //         shared_from_this(),
-        //         asio::placeholders::error,
-        //         asio::placeholders::results
-        //     )
-        // );
     }
 
-    void disconetc()
+    void disconect()
     {
         m_socket.close();
     }
 private:
     
-    void onRecive(const ErrorCode& error, const size_t transferd)
-    {
-    // if(error)
-    // {
-    //     onError(error);
-    //     return;
-    // }
-    
-    // auto data = m_inputBuffer.data();
-    // std::string str(
-    //     asio::buffers_begin(data),
-    //     asio::buffers_begin(data) + transferd
-    // );
-
-    // onMessageRecived(error, str);
-    }
-
-    void onWrite(const ErrorCode& error, size_t transferd)
-    {
-    // if (error)
-    // {
-    //     onError(error);
-    //     return;
-    // }
-    // onMessageSend(error);
-    // m_otputBuffer.consume(transferd);
-    // reciveMessage();
-    }
 };

@@ -1,11 +1,8 @@
 #pragma once
 
-#include <iostream>
-#include <boost/bind/bind.hpp>
-#include <memory>
-#include <boost/asio/strand.hpp>
 #include <boost/asio.hpp>
 
+class SensorMessage;
 
 //========================================================================
 
@@ -28,10 +25,9 @@ public:
 
     };
     // 
-    using ErrorCollback = std::function<void (const ErrorCode)>;
-    using StateChangedCollback = std::function<void (const Connection::State)>;
-    
-    using HendleMessage = std::function<std::string (const std::string&)>;
+    using ErrorCollback = std::function<void (const int, const ErrorCode)>;
+    using StateChangedCollback = std::function<void (const int, const Connection::State)>;
+    using HendleMessage = std::function<void (SensorMessage&)>;
 
     // using LogActions
     using LogerCollback = std::function<void (const std::string&)>;
@@ -73,7 +69,7 @@ private:
 
     void onRead(const ErrorCode& error, const size_t size);
 
-    void write(const std::string& anser);
+    void write(const SensorMessage& anser);
     
     void onWrite(const ErrorCode& error, const size_t transferd);
 

@@ -24,12 +24,14 @@ add_subdirectory(TestUtils)
 add_executable( ServerTests
     # ConnectionTests.cpp
     ServerTests.cpp
+    SensorMessageTest.cpp
 )
 
 target_link_libraries( ServerTests
-    PUBLIC GTest::gtest_main
+    PUBLIC  GTest::gtest_main
     PRIVATE AsyncServerLib
-    PUBLIC TestUtilsLib
+    PRIVATE SensorMessageLib
+    PUBLIC  TestUtilsLib
     PRIVATE Threads::Threads
 )
 

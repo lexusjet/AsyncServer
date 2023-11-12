@@ -134,85 +134,143 @@ TEST(AsyncServer, ServerListening)
 /* ---------------------------------------------------------------- */
 TEST(AsyncServer_Connection, recive_data)
 {
-    std::condition_variable cv;
-    std::atomic<bool> flag = false;
+    SensorMessage outMessage;
+    outMessage.setData(1);
+    outMessage.setDataType(2);
+    outMessage.setLocation(3);
+    outMessage.setExtension(4);
+    outMessage.setNumberInLocation(5);
+    outMessage.setReserv(6);
+    outMessage.setVersion(7);
 
     AsyncServer::ErrorCollback serverErrorCollback = 
     [](const ErrorCode& error)
     {
         EXPECT_TRUE(error);
     };
-    AsyncServer::StateChangedCollback func =
-    [&](const AsyncServer::State state)
-    {
-        flag.store(true);
-        flag.notify_all();
-    };
+    AsyncServer::StateChangedCollback func = [&](const AsyncServer::State state){};
+
+    TestListner listner([&](SensorMessage& message){EXPECT_EQ(message, outMessage);});
 
     tcp::endpoint endpoint(asio::ip::make_address(corectIP), curentPort);
-    AsyncServer server (
+    AsyncServer server(
         endpoint,
         func,
         serverErrorCollback
     );
+    std::thread thr(&AsyncServer::run, &server);
+
     std::thread clientThread(
         [&](){
-            // TestClient client;
-            // EXPECT_NE(client.connect(endpoint), -1);
-            // EXPECT_NE(client.sendMessage(""), -1);
-            // EXPECT_NE(client.reciveMessage(), -1);
-            
+            TestClient client;
+            SensorMessage inMessage;
+            EXPECT_NE(client.connect(endpoint), -1);
+            EXPECT_NE(client.sendMessage(outMessage), -1);
+            EXPECT_NE(client.reciveMessage(inMessage), -1);
+            EXPECT_EQ(outMessage, inMessage);    
         }
     );
-    std::thread thr (&AsyncServer::run, &server);
 
+    clientThread.join();
+    server.stop("");
+    thr.join();
 }
 
-// TEST(AsyncServer_Connection, disconect_while_riding)
-// {
-//     asio::io_context context;
-//     tcp::endpoint endpoint(asio::ip::make_address("127.0.0.1"), 2001);
-//     std::shared_ptr<AsyncServer> server = std::make_shared<AsyncServer>(context, endpoint);
-//     EXPECT_EQ(server->getState(), AsyncServer::Created);
-//     server->run();
-//     std::thread serverThread([&](){context.run();});
-//     std::string message = "hellow server\n";
-//     std::string anser;
-//     std::thread clientThread(
-//         [&](){
-//             asio::io_context clientContext;
-//             tcp::endpoint endP(asio::ip::make_address("127.0.0.1"), 2001);
-//             std::shared_ptr<TestClient> client = std::make_shared<TestClient>(
-//                 clientContext,
-//                 endP,
-//                 [&](const ErrorCode& error){
-//                     EXPECT_FALSE(error);
-//                     client->disconetc();
-//                 },
-//                 [&](const ErrorCode& error, const std::string& str){
-//                     EXPECT_FALSE(true);
-//                 }
-//             );
-//             client->sendMessage(message);
-//             clientContext.run();
-//         }
-//     );
-    
-//     clientThread.join();
-//     context.stop();
-//     serverThread.join();
+/* =================================================================== */
+TEST(AsyncServer_Connection, disconect_while_riding)
+{
+    SensorMessage outMessage;
+    outMessage.setData(1);
+    outMessage.setDataType(2);
+    outMessage.setLocation(3);
+    outMessage.setExtension(4);
+    outMessage.setNumberInLocation(5);
+    outMessage.setReserv(6);
+    outMessage.setVersion(7);
 
-//     EXPECT_EQ(anser, "");
-// }
+    AsyncServer::ErrorCollback serverErrorCollback = 
+    [](const ErrorCode& error)
+    {
+        EXPECT_TRUE(error);
+    };
+    AsyncServer::StateChangedCollback func = [&](const AsyncServer::State state){};
 
-// TEST(AsyncServer_Connection, disconect_while_writing)
-// {
-//     asio::io_context context;
-//     tcp::endpoint endpoint(asio::ip::make_address("127.0.0.1"), 2001);
-//     std::shared_ptr<AsyncServer> server = std::make_shared<AsyncServer>(context, endpoint);
-//     server->run();
-//     EXPECT_EQ(server->getState(), AsyncServer::Listening);
-// }
+    TestListner listner([&](SensorMessage& message){EXPECT_EQ(message, outMessage);});
+
+    tcp::endpoint endpoint(asio::ip::make_address(corectIP), curentPort);
+    AsyncServer server(
+        endpoint,
+        func,
+        serverErrorCollback
+    );
+    std::thread thr(&AsyncServer::run, &server);
+
+    std::thread clientThread(
+        [&](){
+            TestClient client;
+            SensorMessage inMessage;
+            EXPECT_NE(client.connect(endpoint), -1);
+            client.disconect();
+        }
+    );
+
+    clientThread.join();
+    server.stop("");
+    thr.join();
+}
+
+TEST(AsyncServer_Connection, disconect_while_writing)
+{
+    std::atomic<bool> flag = false;
+    SensorMessage outMessage;
+    outMessage.setData(1);
+    outMessage.setDataType(2);
+    outMessage.setLocation(3);
+    outMessage.setExtension(4);
+    outMessage.setNumberInLocation(5);
+    outMessage.setReserv(6);
+    outMessage.setVersion(7);
+
+    AsyncServer::ErrorCollback serverErrorCollback = 
+    [&](const ErrorCode& error)
+    {
+        EXPECT_TRUE(flag.load());
+        EXPECT_TRUE(error);
+    };
+    AsyncServer::StateChangedCollback func = [&](const AsyncServer::State state){};
+
+    TestListner listner(
+        [&](SensorMessage& message)
+        {
+            EXPECT_EQ(message, outMessage);
+            flag.store(true);
+            flag.notify_all();
+        }
+    );
+
+    tcp::endpoint endpoint(asio::ip::make_address(corectIP), curentPort);
+    AsyncServer server(
+        endpoint,
+        func,
+        serverErrorCollback
+    );
+    std::thread thr(&AsyncServer::run, &server);
+
+    std::thread clientThread(
+        [&](){
+            TestClient client;
+            SensorMessage inMessage;
+            EXPECT_NE(client.connect(endpoint), -1);
+            EXPECT_NE(client.sendMessage(outMessage), -1);
+            flag.wait(true);
+            client.disconect();
+        }
+    );
+
+    clientThread.join();
+    server.stop("");
+    thr.join();
+}
 
 // TEST(AsyncServer_Connection, timeout_check)
 // {

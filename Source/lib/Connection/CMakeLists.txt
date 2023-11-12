@@ -41,6 +41,10 @@ add_library(ConnectionLib STATIC
     src/Connection.cpp 
 )
 
+target_link_libraries(ConnectionLib
+    PUBLIC SensorMessageLib
+)
+
 target_include_directories(ConnectionLib
     PUBLIC include
 )
